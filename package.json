@@ -1,0 +1,18 @@
+{
+  "name": "graton",
+  "version": "0.0.1",
+  "description": "TODO: provide a short description",
+  "scripts": {
+    "clean": "rm -f -r node_modules && rm -f package-lock.json",
+    "start": "npx http-server -p 8000"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VCityTeam/TeaTime.git"
+  },
+  "dependencies": {
+    "d3": "^7.0.0",
+    "d3-force-3d": "^3.0.5",
+    "three": "0.154.0"
+  }
+}

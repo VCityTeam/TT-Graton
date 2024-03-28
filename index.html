@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>3D Fructerman-Reingold Layouts</title>
+    <style>
+        body {
+            overflow: hidden;
+        }
+
+        #buttons {
+            position: absolute;
+            z-index: 2;
+            top: 5px;
+        }
+        #container {
+          z-index: 1;
+          position: absolute;
+          width: 100%;
+          height: 100%;
+          left: 0px;
+          top: 0px;
+          padding: 0px;
+          border: 1px solid red;
+        }
+
+        .tooltip {
+          position: absolute;
+          z-index: 2;
+          background-color: #555;
+          color: #fff;
+          text-align: center;
+          border-radius: 6px;
+          padding: 5px 0;
+        }
+
+        .hidden {
+          visibility: hidden;
+        }
+
+        .visible {
+          visibility: visible;
+        }
+    </style>
+</head>
+<body>
+<div id="buttons">
+  <button id="ndp-button">Load graph</button>
+</div>
+<div id="container"></div>
+<div id="tooltip" class="tooltip hidden">Hello world</div>
+
+</body>
+
+<!-- 
+  The following is the ES6 way of importing. Refer e.g. to 
+  https://stackoverflow.com/questions/31354559/using-node-js-require-vs-es6-import-export
+-->
+<script type="importmap">
+  {
+    "imports": {
+      "orbitControls": "./node_modules/three/examples/jsm/controls/OrbitControls.js",
+      "three": "./node_modules/three/build/three.module.js",
+      "d3": "./node_modules/d3/dist/d3.min.js",
+      "d3-force-3d": "./node_modules/d3-force-3d/dist/d3-force-3d.js",
+      "d3-octree": "./node_modules/d3-octree/dist/d3-octree.js"
+    }
+  }
+</script>
+
+<!--
+  Three et d3 semblent loadées par l'importmap ci-dessus et il est donc inutile
+  de le repeter ici
+  <script type="module" src="./node_modules/three/build/three.module.js"></script>
+  <script type="module" src="./node_modules/d3/dist/d3.min.js"></script>
+
+  Vertex et Edge n'étant pas utilisées directement dans la partie script de
+  cet index.html (mais indirectement loadés par Graph.js), il semblerait inutile 
+  de les loader ici. Mais bon à vérifier. 
+  <script type="module" src="./Vertex.js"></script>
+  <script type="module" src="./Edge.js"></script>
+
+  Le mot octree n'a pas d'occurence dans ces sources (c'est peut-être une
+  dépendance indirecte mais comment le trouver ?)
+  <script src="./node_modules/d3-octree/dist/d3-octree.js"></script>
+-->
+
+<!-- 
+L'import suivant est nécessaire pour pouvoir écrire d3.forceSimulation
+dans Graph.js, ce qui signifie qu'il vient completer l'importmap précédent.
+Hummm. C'est pas clean tout ça...
+-->
+<script src="./node_modules/d3-force-3d/dist/d3-force-3d.js"></script>
+
+
+
+<script type="module">
+
+import * as THREE from 'three';
+
+import { OrbitControls } from 'orbitControls';
+
+import {Graph} from './Graph.js';
+
+    var width = window.innerWidth;
+    var height = window.innerHeight;
+    var aspectRatio = width / height;
+    let renderer, scene, controls, camera, group;
+
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    const tooltip = document.getElementById("tooltip");
+    let intersectedNode = null;
+
+    window.test;
+
+    function init(){
+      // scene creation
+      scene = new THREE.Scene();
+
+      // with a grey background
+      scene.background = new THREE.Color(0x444444);
+
+      // perspective camera creation
+      camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.001, 10000000);
+      camera.position.set(10,10,10);
+      camera.updateProjectionMatrix();
+      scene.camera = camera;
+
+      // add ambiant light
+      const ambientLight = new THREE.AmbientLight(0x404040, 3.0);
+      scene.add(ambientLight);
+
+      // add directional light
+      const light = new THREE.DirectionalLight(0xffffff, 0.75);
+      light.position.set(1, 1, 1).normalize();
+      scene.add(light);
+
+      // create a group to contain all graph meshes
+      group = new THREE.Object3D();
+      scene.add(group);
+
+      // init renderer
+      renderer = new THREE.WebGLRenderer();
+      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setSize(width, height);
+      document.getElementById("container").appendChild(renderer.domElement);
+
+      // add orbit controls
+      controls = new OrbitControls(camera, renderer.domElement);
+
+      // update the window when resized
+      window.addEventListener('resize', onWindowResize);
+      window.addEventListener('pointermove', onPointerMove);
+      window.addEventListener('dblclick', onDblClick);
+
+      addCube();
+      animate();
+
+      // test (load a graph) !!
+      window.test = new Graph("./data/nomenclature_NDP.json", group);
+      const gr = window.test.load();
+      console.log(gr);
+    }
+
+    // add a cube in the scene, just to check it is well initialized
+    function addCube(){
+      const geometry = new THREE.BoxGeometry(1, 1, 1);
+      const material = new THREE.MeshBasicMaterial({color: 0x00ff00});
+      const cube = new THREE.Mesh(geometry, material);
+
+      scene.add(cube);
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function onPointerMove(event) {
+    	// calculate pointer position in normalized device coordinates
+    	// (-1 to +1) for both components
+    	pointer.x = ( event.clientX / window.innerWidth ) * 2 - 1;
+    	pointer.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
+
+      tooltip.style.top = (event.clientY - 40) + 'px';
+      tooltip.style.left = (event.clientX - 20) + 'px';
+    }
+
+    function onDblClick(event){
+      console.log(intersectedNode);
+      if(intersectedNode){
+        camera.position.set(intersectedNode.x, intersectedNode.y, intersectedNode.z);
+        camera.translateZ(-20);
+      }
+    }
+
+    function animate(){
+      requestAnimationFrame(animate);
+      controls.update();
+
+      // update the picking ray with the camera and pointer position
+    	raycaster.setFromCamera(pointer, camera);
+
+      // calculate objects intersecting the picking ray
+    	const intersects = raycaster.intersectObjects(group.children);
+
+      // if there is no intersection, hide the tooltip
+      if(intersects.length == 0) {
+        tooltip.classList.remove("visible");
+        tooltip.classList.add("hidden");
+        intersectedNode = null;
+      }
+      // else, display the name of the interesected node
+      else {
+        if(intersects[0] && intersects[0].instanceId){
+          tooltip.classList.remove("hidden");
+          tooltip.classList.add("visible");
+          tooltip.innerHTML = window.test.graph.nodes[intersects[0].instanceId].data.name;
+          intersectedNode = window.test.graph.nodes[intersects[0].instanceId];
+        }
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    // attach the event listeners to create new graphs
+    // add event listeners to button
+    document.getElementById('ndp-button').addEventListener('click', function() {
+        test.applyForceLayout(test.graph)
+    });
+
+    init();
+
+    //expose three's contents
+    window.scene = scene;
+
+</script>
+</html>
